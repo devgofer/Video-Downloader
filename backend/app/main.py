@@ -6,6 +6,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, HttpUrl
 
+MAX_BATCH_SIZE = 20
+
 from app.services.detector import detect_platform
 from app.services.downloader import get_video_info
 from app.services.jobs import create_job, get_job, run_job
@@ -30,6 +32,10 @@ class URLRequest(BaseModel):
 
 class DownloadRequest(BaseModel):
     url: HttpUrl
+    quality: str = "best"
+
+class BatchDownloadRequest(BaseModel):
+    urls: list[HttpUrl]
     quality: str = "best"
 
 @app.get("/api/health")
@@ -64,6 +70,27 @@ def create_download(request: DownloadRequest):
     job = create_job(url, request.quality)
     executor.submit(run_job, job, DOWNLOAD_DIR)
     return job.snapshot() | {"platform": platform}
+
+@app.post("/api/downloads/batch", status_code=202)
+def create_batch_download(request: BatchDownloadRequest):
+    urls = list(dict.fromkeys(str(url) for url in request.urls))
+    if not urls:
+        raise HTTPException(400, "Provide at least one video URL.")
+    if len(urls) > MAX_BATCH_SIZE:
+        raise HTTPException(400, f"You can download up to {MAX_BATCH_SIZE} URLs at once.")
+
+    jobs = []
+    for url in urls:
+        platform = detect_platform(url)
+        if platform == "unknown":
+            continue
+        job = create_job(url, request.quality)
+        executor.submit(run_job, job, DOWNLOAD_DIR)
+        jobs.append(job.snapshot() | {"platform": platform, "url": url})
+
+    if not jobs:
+        raise HTTPException(400, "No supported video URLs were found.")
+    return {"jobs": jobs, "skipped": len(urls) - len(jobs)}
 
 @app.get("/api/downloads/{job_id}")
 def download_status(job_id: str):
