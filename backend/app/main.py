@@ -1,3 +1,4 @@
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -6,13 +7,15 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, HttpUrl
 
 from app.services.detector import detect_platform
-from app.services.downloader import get_video_info, download_video
+from app.services.downloader import get_video_info
+from app.services.jobs import create_job, get_job, run_job
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 DOWNLOAD_DIR = BASE_DIR / "downloads"
 DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
-app = FastAPI(title="Video Downloader API", version="0.1.0")
+app = FastAPI(title="Video Downloader API", version="0.2.0")
+executor = ThreadPoolExecutor(max_workers=2)
 
 app.add_middleware(
     CORSMiddleware,
@@ -47,26 +50,27 @@ def inspect_video(request: URLRequest):
         "platform": platform,
         "title": info.get("title") or "Untitled video",
         "thumbnail": info.get("thumbnail"),
+        "preview_url": info.get("url"),
         "duration": info.get("duration"),
         "uploader": info.get("uploader") or info.get("channel"),
     }
 
-@app.post("/api/download")
-def download(request: DownloadRequest):
+@app.post("/api/downloads", status_code=202)
+def create_download(request: DownloadRequest):
     url = str(request.url)
     platform = detect_platform(url)
     if platform == "unknown":
         raise HTTPException(400, "Unsupported or unrecognized video URL.")
-    try:
-        output_path, title = download_video(url, request.quality, DOWNLOAD_DIR)
-    except Exception as exc:
-        raise HTTPException(422, f"Download failed: {exc}") from exc
-    return {
-        "platform": platform,
-        "title": title,
-        "filename": output_path.name,
-        "download_url": f"/api/files/{output_path.name}",
-    }
+    job = create_job(url, request.quality)
+    executor.submit(run_job, job, DOWNLOAD_DIR)
+    return job.snapshot() | {"platform": platform}
+
+@app.get("/api/downloads/{job_id}")
+def download_status(job_id: str):
+    job = get_job(job_id)
+    if not job:
+        raise HTTPException(404, "Download job not found.")
+    return job.snapshot()
 
 @app.get("/api/files/{filename}")
 def get_file(filename: str):
