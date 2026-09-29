@@ -1,11 +1,24 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 
 type VideoInfo = {
   platform: string;
   title: string;
   thumbnail?: string;
+  preview_url?: string;
   duration?: number;
   uploader?: string;
+};
+
+type DownloadJob = {
+  job_id: string;
+  status: "queued" | "starting" | "downloading" | "processing" | "completed" | "failed";
+  progress: number;
+  speed?: string;
+  eta?: string;
+  title?: string;
+  filename?: string;
+  error?: string;
+  download_url?: string;
 };
 
 const API_BASE = "http://localhost:8000";
@@ -26,18 +39,38 @@ function formatDuration(seconds?: number) {
   return `${minutes}:${secs.toString().padStart(2, "0")}`;
 }
 
+function statusLabel(status: DownloadJob["status"]) {
+  return {
+    queued: "Queued",
+    starting: "Starting",
+    downloading: "Downloading",
+    processing: "Processing",
+    completed: "Completed",
+    failed: "Failed",
+  }[status];
+}
+
 export default function App() {
   const [url, setUrl] = useState("");
   const [quality, setQuality] = useState("best");
   const [info, setInfo] = useState<VideoInfo | null>(null);
   const [loading, setLoading] = useState(false);
+  const [job, setJob] = useState<DownloadJob | null>(null);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const pollRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (pollRef.current) window.clearTimeout(pollRef.current);
+    };
+  }, []);
 
   async function inspect(event?: FormEvent) {
     event?.preventDefault();
     setError("");
     setMessage("");
+    setJob(null);
     setInfo(null);
     if (!url.trim()) {
       setError("Paste a video URL first.");
@@ -60,26 +93,51 @@ export default function App() {
     }
   }
 
+  async function pollJob(jobId: string) {
+    try {
+      const response = await fetch(`${API_BASE}/api/downloads/${jobId}`);
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || "Could not read download status.");
+      setJob(data);
+
+      if (data.status === "completed") {
+        setMessage(`Downloaded: ${data.filename}`);
+        if (data.download_url) window.open(`${API_BASE}${data.download_url}`, "_blank");
+        return;
+      }
+      if (data.status === "failed") {
+        setError(data.error || "Download failed.");
+        return;
+      }
+      pollRef.current = window.setTimeout(() => pollJob(jobId), 700);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not read download status.");
+    }
+  }
+
   async function download() {
     setLoading(true);
     setError("");
     setMessage("");
+    setJob(null);
     try {
-      const response = await fetch(`${API_BASE}/api/download`, {
+      const response = await fetch(`${API_BASE}/api/downloads`, {
         method: "POST",
         headers: {"Content-Type": "application/json"},
         body: JSON.stringify({url, quality}),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.detail || "Download failed.");
-      setMessage(`Downloaded: ${data.filename}`);
-      window.open(`${API_BASE}${data.download_url}`, "_blank");
+      setJob(data);
+      setLoading(false);
+      pollJob(data.job_id);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Download failed.");
-    } finally {
       setLoading(false);
     }
   }
+
+  const progress = Math.max(0, Math.min(100, job?.progress ?? 0));
 
   return (
     <main className="page">
@@ -102,6 +160,7 @@ export default function App() {
               onChange={(event) => setUrl(event.target.value)}
               placeholder="https://www.instagram.com/... or any supported URL"
               autoComplete="off"
+              inputMode="url"
             />
             <button type="submit" disabled={loading}>
               {loading ? "Checking..." : "Inspect"}
@@ -114,7 +173,22 @@ export default function App() {
 
         {info && (
           <section className="result-card">
-            {info.thumbnail && <img className="thumbnail" src={info.thumbnail} alt="" />}
+            <div className="preview">
+              {info.preview_url ? (
+                <video
+                  className="video-preview"
+                  src={info.preview_url}
+                  poster={info.thumbnail}
+                  controls
+                  playsInline
+                  preload="metadata"
+                />
+              ) : info.thumbnail ? (
+                <img className="thumbnail" src={info.thumbnail} alt="" />
+              ) : (
+                <div className="preview-empty">Preview unavailable</div>
+              )}
+            </div>
             <div className="result-content">
               <div className="badge">{platformNames[info.platform] || info.platform}</div>
               <h2>{info.title}</h2>
@@ -129,7 +203,7 @@ export default function App() {
               <div className="options">
                 <label>
                   Quality
-                  <select value={quality} onChange={(event) => setQuality(event.target.value)}>
+                  <select value={quality} onChange={(event) => setQuality(event.target.value)} disabled={!!job && !["completed", "failed"].includes(job.status)}>
                     <option value="best">Best available</option>
                     <option value="1080p">Up to 1080p</option>
                     <option value="720p">Up to 720p</option>
@@ -137,10 +211,26 @@ export default function App() {
                     <option value="audio">Audio only (MP3)</option>
                   </select>
                 </label>
-                <button className="download-button" onClick={download} disabled={loading}>
-                  {loading ? "Downloading..." : "Download"}
+                <button className="download-button" onClick={download} disabled={loading || (!!job && !["completed", "failed"].includes(job.status))}>
+                  {job && !["completed", "failed"].includes(job.status) ? statusLabel(job.status) : "Download"}
                 </button>
               </div>
+            </div>
+          </section>
+        )}
+
+        {job && !["completed", "failed"].includes(job.status) && (
+          <section className="progress-card" aria-live="polite">
+            <div className="progress-head">
+              <strong>{statusLabel(job.status)}</strong>
+              <span>{Math.round(progress)}%</span>
+            </div>
+            <div className="progress-track">
+              <div className="progress-fill" style={{width: `${progress}%`}} />
+            </div>
+            <div className="progress-meta">
+              <span>{job.speed || "Preparing download..."}</span>
+              <span>{job.eta ? `ETA ${job.eta}` : ""}</span>
             </div>
           </section>
         )}
