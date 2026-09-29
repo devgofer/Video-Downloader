@@ -1,5 +1,6 @@
 from pathlib import Path
-import re
+from typing import Callable, Optional
+
 import yt_dlp
 
 QUALITY_FORMATS = {
@@ -24,7 +25,12 @@ def get_video_info(url: str) -> dict:
     with yt_dlp.YoutubeDL(options) as ydl:
         return ydl.extract_info(url, download=False)
 
-def download_video(url: str, quality: str, download_dir: Path) -> tuple[Path, str]:
+def download_video(
+    url: str,
+    quality: str,
+    download_dir: Path,
+    progress_hook: Optional[Callable[[dict], None]] = None,
+) -> tuple[Path, str]:
     format_selector = QUALITY_FORMATS.get(quality, QUALITY_FORMATS["best"])
     is_audio = quality == "audio"
     options = {
@@ -33,6 +39,8 @@ def download_video(url: str, quality: str, download_dir: Path) -> tuple[Path, st
         "outtmpl": str(download_dir / "%(title).180s [%(id)s].%(ext)s"),
         "merge_output_format": "mp4",
     }
+    if progress_hook:
+        options["progress_hooks"] = [progress_hook]
     if is_audio:
         options["postprocessors"] = [{
             "key": "FFmpegExtractAudio",
