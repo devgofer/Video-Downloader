@@ -7,6 +7,7 @@
 * { box-sizing: border-box; }
 body { margin: 0; min-width: 320px; min-height: 100vh; }
 button, input, select { font: inherit; }
+button { touch-action: manipulation; }
 .page { min-height: 100vh; padding: 64px 20px; display: flex; justify-content: center; }
 .shell { width: min(860px, 100%); }
 .hero { text-align: center; padding: 42px 20px 38px; }
@@ -15,7 +16,7 @@ button, input, select { font: inherit; }
 h1 { margin: 0; font-size: clamp(42px, 7vw, 72px); line-height: .98; letter-spacing: -.055em; }
 h1 span { opacity: .45; }
 .subtitle { max-width: 560px; margin: 22px auto 0; color: #6f6b64; font-size: 17px; line-height: 1.6; }
-.input-card, .result-card { border: 1px solid #ddd8cf; border-radius: 24px; background: rgba(255,255,255,.7); box-shadow: 0 18px 60px rgba(31,27,20,.06); }
+.input-card, .result-card, .progress-card { border: 1px solid #ddd8cf; border-radius: 24px; background: rgba(255,255,255,.7); box-shadow: 0 18px 60px rgba(31,27,20,.06); }
 .input-card { padding: 20px; }
 .input-card label { display: block; margin: 0 0 10px; font-size: 13px; font-weight: 750; }
 .input-row { display: flex; gap: 10px; }
@@ -26,24 +27,44 @@ button:disabled { cursor: wait; opacity: .55; }
 .alert { margin-top: 14px; border-radius: 14px; padding: 14px 16px; font-size: 14px; }
 .error { background: #fff0ef; color: #9b332c; }
 .success { background: #edf8ef; color: #28723a; }
-.result-card { margin-top: 18px; overflow: hidden; display: grid; grid-template-columns: 240px 1fr; }
-.thumbnail { width: 100%; height: 100%; min-height: 230px; object-fit: cover; background: #e9e5de; }
-.result-content { padding: 26px; }
+.result-card { margin-top: 18px; overflow: hidden; display: grid; grid-template-columns: minmax(260px, 38%) 1fr; }
+.preview { min-width: 0; background: #e9e5de; display: flex; }
+.video-preview, .thumbnail { display: block; width: 100%; height: 100%; min-height: 230px; object-fit: cover; background: #e9e5de; }
+.preview-empty { width: 100%; min-height: 230px; display: grid; place-items: center; color: #89847b; font-size: 13px; }
+.result-content { padding: 26px; min-width: 0; }
 .badge { display: inline-flex; border-radius: 999px; background: #ece9e2; padding: 6px 10px; font-size: 11px; font-weight: 800; }
-h2 { margin: 15px 0 6px; font-size: 24px; line-height: 1.2; }
+h2 { margin: 15px 0 6px; font-size: 24px; line-height: 1.2; overflow-wrap: anywhere; }
 .meta { margin: 0; color: #77736c; font-size: 13px; }
 .options { margin-top: 28px; display: flex; align-items: end; gap: 12px; }
 .options label { flex: 1; display: grid; gap: 7px; font-size: 12px; font-weight: 750; }
 select { width: 100%; border: 1px solid #d9d4cb; border-radius: 12px; background: white; padding: 12px; }
-.download-button { height: 43px; }
+.download-button { height: 43px; white-space: nowrap; }
+.progress-card { margin-top: 18px; padding: 20px 22px; }
+.progress-head, .progress-meta { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
+.progress-head { font-size: 14px; }
+.progress-head span { font-variant-numeric: tabular-nums; }
+.progress-track { height: 10px; margin-top: 12px; overflow: hidden; border-radius: 999px; background: #e7e2da; }
+.progress-fill { height: 100%; border-radius: inherit; background: #171717; transition: width .25s ease; }
+.progress-meta { margin-top: 9px; color: #89847b; font-size: 11px; }
 footer { padding: 26px 10px; text-align: center; color: #89847b; font-size: 11px; line-height: 1.6; }
+
 @media (max-width: 640px) {
-  .page { padding: 24px 14px; }
-  .hero { padding-top: 28px; }
+  .page { padding: 18px 12px 28px; }
+  .hero { padding: 28px 8px 30px; }
+  .logo { margin-bottom: 18px; }
+  h1 { font-size: clamp(38px, 13vw, 54px); }
+  .subtitle { margin-top: 16px; font-size: 15px; }
+  .input-card { padding: 15px; border-radius: 18px; }
   .input-row { flex-direction: column; }
-  .input-row button { min-height: 46px; }
-  .result-card { grid-template-columns: 1fr; }
-  .thumbnail { max-height: 260px; }
-  .options { flex-direction: column; align-items: stretch; }
-  .download-button { min-height: 46px; }
+  .input-row input { min-height: 48px; }
+  .input-row button { min-height: 48px; }
+  .result-card { grid-template-columns: 1fr; border-radius: 18px; }
+  .video-preview, .thumbnail { min-height: 0; max-height: 260px; aspect-ratio: 16 / 9; }
+  .preview-empty { min-height: 180px; }
+  .result-content { padding: 20px 17px; }
+  h2 { font-size: 20px; }
+  .options { flex-direction: column; align-items: stretch; gap: 10px; margin-top: 22px; }
+  .download-button { width: 100%; min-height: 48px; }
+  .progress-card { border-radius: 18px; padding: 17px; }
+  .progress-meta { flex-direction: column; align-items: flex-start; gap: 4px; }
 }
