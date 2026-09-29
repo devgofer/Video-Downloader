@@ -99,9 +99,12 @@ def download_status(job_id: str):
         raise HTTPException(404, "Download job not found.")
     return job.snapshot()
 
-@app.get("/api/files/{filename}")
-def get_file(filename: str):
-    safe_name = Path(filename).name
+@app.get("/api/files/{job_id}")
+def get_file(job_id: str):
+    job = get_job(job_id)
+    if not job or not job.filename:
+        raise HTTPException(404, "File not found.")
+    safe_name = Path(job.filename).name
     path = DOWNLOAD_DIR / safe_name
     if not path.is_file():
         raise HTTPException(404, "File not found.")

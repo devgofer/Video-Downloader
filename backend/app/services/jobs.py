@@ -80,7 +80,9 @@ def run_job(job: DownloadJob, download_dir: Path) -> None:
             job.progress = 100.0
             job.title = title
             job.filename = output_path.name
-            job.download_url = f"/api/files/{output_path.name}"
+            # Serve by job id so titles with #, ?, or other URL-reserved
+            # characters cannot be truncated as fragments or query strings.
+            job.download_url = f"/api/files/{job.id}"
     except Exception as exc:
         with job._lock:
             job.status = "failed"

@@ -109,7 +109,7 @@ export default function App() {
       setJobs((current) => current.map((item) => item.job_id === jobId ? {...item, ...data} : item));
 
       if (data.status === "completed") {
-        if (data.download_url) window.open(`${API_BASE}${data.download_url}`, "_blank");
+        if (data.download_url) window.open(`${API_BASE}${data.download_url}`, "_blank", "noopener,noreferrer");
         return;
       }
       if (data.status === "failed") return;
